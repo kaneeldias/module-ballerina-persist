@@ -111,3 +111,24 @@ public type Employee record  {|
     @Relation {keyColumns: ["companyId"], reference: ["id"]}
     Company company?;
 |};
+
+// many-to-many relation
+@Entity { 
+    key: ["id"],
+    tableName: "Teachers"
+}
+public type Teacher record  {|	
+    readonly int id;
+    string name;
+    Student[] students?;
+|};
+
+@Entity { 
+    key: ["id"],
+    tableName: "Students"
+}
+public type Student record  {|	
+    readonly int id;
+    string name;
+    Teacher[] teachers?;
+|};

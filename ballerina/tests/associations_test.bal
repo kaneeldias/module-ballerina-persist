@@ -339,7 +339,7 @@ function oneToManyCreateTest3() returns error? {
 }
 
 @test:Config {
-    groups: ["associations", "one-to-manyx"]
+    groups: ["associations", "one-to-many"]
 }
 function oneToManyCreateTest4() returns error? {
     Company company = {
@@ -374,7 +374,7 @@ function oneToManyCreateTest4() returns error? {
 }
 
 @test:Config {
-    groups: ["associations", "one-to-manyx"]
+    groups: ["associations", "one-to-many"]
 }
 function oneToManyUpdateTest4() returns error? {
     Company company = {
@@ -406,5 +406,37 @@ function oneToManyUpdateTest4() returns error? {
         id: 5,
         name: "TestCompanyUpdated5",
         employees: [{id: 8, name: "TestEmployeeUpdated8"}, {id: 9, name: "TestEmployee9"}]
+    });
+}
+
+@test:Config {
+    groups: ["associations", "many-to-many"]
+}
+function manyToManyCreateTest1() returns error? {
+    Teacher teacher1 = {
+        id: 1,
+        name: "TestTeacher1"
+    };
+    Teacher teacher2 = {
+        id: 1,
+        name: "TestTeacher2"
+    };
+    TeacherClient teacherClient = check new();
+    _ = check teacherClient->create(teacher1);
+    _ = check teacherClient->create(teacher2);
+    
+    StudentClient studentClient = check new();
+    Student student = {
+        id: 1,
+        name: "TestStudent1",
+        teachers: [teacher1, teacher2]
+    };
+    _ = check studentClient->create(student);
+
+    Student student2 = check studentClient->readByKey(1, [TeacherEntity]);
+    test:assertEquals(student, <Student>{
+        id: 1,
+        name: "TestStudent1",
+        teachers: [teacher1, teacher2]
     });
 }
