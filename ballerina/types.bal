@@ -18,14 +18,16 @@ import ballerina/sql;
 public class PersistStream {
     
     private stream<anydata, sql:Error?>? anydataStream;
+    private typedesc<record {}> targetType;
     private Error? err;
     private string[]? fields;
     private string[]? include;
     private typedesc<record{}>[]? typeDescriptions = ();
     private SQLClient? persistClient;
 
-    public isolated function init(stream<anydata, sql:Error?>? anydataStream, Error? err = (), string[]? fields = (), string[]? include = (), any[]? typeDescriptions = (), SQLClient? persistClient = ()) {
+    public isolated function init(stream<anydata, sql:Error?>? anydataStream, typedesc<record {}> targetType, Error? err = (), string[]? fields = (), string[]? include = (), any[]? typeDescriptions = (), SQLClient? persistClient = ()) {
         self.anydataStream = anydataStream;
+        self.targetType = targetType;
         self.err = err;
         self.fields = fields;
         self.include = include;
@@ -53,13 +55,26 @@ public class PersistStream {
                 return <Error>error(streamValue.message());
             } else {
                 anydata|error value = streamValue.value;
+
                 if value is error {
                     return <Error>error(value.message());
                 }
-                record {|anydata value;|} nextRecord = {value: value};
-                if self.include is string[] {
-                    check (<SQLClient>self.persistClient).getManyRelations(nextRecord.value, <string[]> self.fields, <string[]>self.include, <typedesc<record {}>[]>self.typeDescriptions);
+
+                if value is record {} && self.include is string[] {
+                    foreach string fieldName in value.keys() {
+                        if (<string[]>self.include).indexOf(fieldName) != () {
+                            int includeIndex = <int>(<string[]>self.include).indexOf(fieldName);
+                            typedesc<record {}> typeDescription = (<typedesc<record {}>[]>self.typeDescriptions)[includeIndex];
+                            do {
+                                value[fieldName] = check (check (<string>value[fieldName]).fromJsonString()).cloneWithType(typeDescription);
+                            } on fail error e {
+                                return <Error>e;
+                            }
+                        }
+                    }
                 }
+
+                record {|anydata value;|} nextRecord = {value: checkpanic value.cloneWithType(self.targetType)};
                 return nextRecord;
             }
         } else {

@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/io;
 import ballerina/sql;
 
 # The client used by the generated persist clients to abstract and 
@@ -78,18 +79,30 @@ public client class SQLClient {
     # + return - A record in the `rowType` type or a `persist:Error` if the operation fails
     public isolated function runReadByKeyQuery(typedesc<record {}> rowType, anydata key, string[] fields = [], string[] include = [], typedesc<record {}>[] typeDescriptions = []) returns record {}|Error {
         sql:ParameterizedQuery query = sql:queryConcat(
-            `SELECT `, self.getSelectColumnNames(fields, []), ` FROM `, self.tableName, ` AS `, stringToParameterizedQuery(self.entityName)
+            `SELECT `, self.getSelectColumnNames(fields, include), ` FROM `, self.tableName, ` AS `, stringToParameterizedQuery(self.entityName)
         );
 
+        boolean groupRequired = false;
+
         foreach string joinKey in self.joinMetadata.keys() {
-            JoinMetadata joinMetadata = self.joinMetadata.get(joinKey);
-            if include.indexOf(joinKey) != () && (joinMetadata.'type == ONE_TO_ONE  || joinMetadata.'type == ONE_TO_MANY) {
+            if include.indexOf(joinKey) != () {
+                JoinMetadata joinMetadata = self.joinMetadata.get(joinKey);
+                if joinMetadata.'type == MANY_TO_ONE {
+                    groupRequired = true;
+                }
                 query = sql:queryConcat(query, ` LEFT JOIN `, stringToParameterizedQuery(joinMetadata.refTable + " " + joinKey),
                                         ` ON `, check self.getJoinFilters(joinKey, joinMetadata.refColumns, <string[]>joinMetadata.joinColumns));
             }
         }
 
         query = sql:queryConcat(query, ` WHERE `, check self.getGetKeyWhereClauses(key));
+
+        if groupRequired {
+            query = sql:queryConcat(query, ` GROUP BY `, stringToParameterizedQuery(joinArray(self.keyFields)));
+        }
+
+        io:println(query);
+
         record {}|sql:Error result = self.dbClient->queryRow(query, rowType);
 
         if result is sql:NoRowsError {
@@ -98,7 +111,7 @@ public client class SQLClient {
         }
 
         if result is record {} {
-            check self.getManyRelations(result, fields, include, typeDescriptions);
+            //check self.getManyRelations(result, fields, include, typeDescriptions);
         }
 
         if result is sql:Error {
@@ -119,17 +132,26 @@ public client class SQLClient {
             `SELECT `, self.getSelectColumnNames(fields, include), ` FROM `, self.tableName, ` `, stringToParameterizedQuery(self.entityName)
         );
 
+        boolean groupRequired = false;
+
         string[] joinKeys = self.joinMetadata.keys();
         foreach string joinKey in joinKeys {
             if include.indexOf(joinKey) != () {
                 JoinMetadata joinMetadata = self.joinMetadata.get(joinKey);
                 if joinMetadata.'type == MANY_TO_ONE {
-                    continue;
+                    groupRequired = true;
                 }
+
                 query = sql:queryConcat(query, ` LEFT JOIN `, stringToParameterizedQuery(joinMetadata.refTable + " " + joinKey),
                                         ` ON `, check self.getJoinFilters(joinKey, joinMetadata.refColumns, <string[]>joinMetadata.joinColumns));
             }
         }
+
+        if groupRequired {
+            query = sql:queryConcat(query, ` GROUP BY `, stringToParameterizedQuery(joinArray(self.keyFields)));
+        }
+
+        io:println(query);
 
         stream<record {}, sql:Error?> resultStream = self.dbClient->query(query, rowType);
         return resultStream;
@@ -194,7 +216,7 @@ public client class SQLClient {
                 }
 
                 query = sql:queryConcat(
-                    ` SELECT `, self.getManyRelationColumnNames(joinMetadata.fieldName, fields),
+                    ` SELECT `, stringToParameterizedQuery(joinArray(self.getManyRelationColumnNames(joinMetadata.fieldName, fields))),
                     ` FROM `, stringToParameterizedQuery(joinMetadata.refTable),
                     ` WHERE`, check self.getWhereClauses(whereFilter, true)
                 );
@@ -268,7 +290,7 @@ public client class SQLClient {
         int columnCount = 0;
 
         foreach string key in self.fieldMetadata.keys() {
-            if fields != [] && fields.indexOf(key) == () {
+            if fields != [] && fields.indexOf(key) is () {
                 continue;
             }
             string fieldName = self.getFieldFromKey(key);
@@ -293,12 +315,34 @@ public client class SQLClient {
                 }
             }
         }
+
+        foreach string joinMetadataKey in self.joinMetadata.keys() {
+            if include.indexOf(joinMetadataKey) != () && self.joinMetadata.get(joinMetadataKey).'type == MANY_TO_ONE {
+                string[] columnNames = self.getManyRelationColumnNames(joinMetadataKey, fields);
+                if columnCount > 0 {
+                    params = sql:queryConcat(params, `, `);
+                }
+
+                string jsonQuery = "CONCAT('[', GROUP_CONCAT(JSON_OBJECT(";
+                foreach int i in 0..<columnNames.length() {
+                    if i > 0 {
+                        jsonQuery = jsonQuery + ", ";
+                    }
+                    string columnName = columnNames[i];
+                    jsonQuery = jsonQuery + "'" + columnName + "', " + joinMetadataKey + "." + columnName;
+                }
+                jsonQuery = jsonQuery + ") separator ',') , ']') AS " + joinMetadataKey;
+
+                params = sql:queryConcat(params, stringToParameterizedQuery(jsonQuery));
+                columnCount = columnCount + 1;
+            }
+        }
+
         return params;
     }
 
-    private isolated function getManyRelationColumnNames(string prefix, string[] fields) returns sql:ParameterizedQuery {
-        sql:ParameterizedQuery params = ` `;
-        int columnCount = 0;
+    private isolated function getManyRelationColumnNames(string prefix, string[] fields) returns string[] {
+        string[] columnNames = [];
         foreach string key in fields {
             if key.indexOf(prefix + "[].") is () {
                 continue;
@@ -309,15 +353,9 @@ public client class SQLClient {
                 continue;
             }
 
-            if columnCount > 0 {
-                params = sql:queryConcat(params, `, `);
-            }
-
-            string columnName = fieldMetadata.relation.refField;
-            params = sql:queryConcat(params, stringToParameterizedQuery(columnName));
-            columnCount = columnCount + 1;
+            columnNames.push(fieldMetadata.relation.refField);
         }
-        return params;
+        return columnNames;
     }
 
     private isolated function getGetKeyWhereClauses(anydata key) returns sql:ParameterizedQuery|Error {

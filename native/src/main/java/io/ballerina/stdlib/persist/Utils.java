@@ -19,6 +19,7 @@
 package io.ballerina.stdlib.persist;
 
 import io.ballerina.runtime.api.Environment;
+import io.ballerina.runtime.api.Module;
 import io.ballerina.runtime.api.PredefinedTypes;
 import io.ballerina.runtime.api.TypeTags;
 import io.ballerina.runtime.api.creators.TypeCreator;
@@ -36,6 +37,7 @@ import io.ballerina.runtime.api.values.BString;
 import io.ballerina.runtime.api.values.BTypedesc;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -104,6 +106,32 @@ public class Utils {
         }
 
         return new BArray[]{fieldsArray, includeArray, typeDescriptionArray};
+    }
+
+    static BTypedesc getRowType(RecordType recordType) {
+        Map<String, Field> fieldsMap = new HashMap<>();
+
+        for (Field field : recordType.getFields().values()) {
+            Type type = field.getFieldType();
+
+            if (type.getTag() == TypeTags.ARRAY_TAG) {
+                type = ((ArrayType) type).getElementType();
+
+                if ((type.getTag() == TypeTags.RECORD_TYPE_TAG || type.getTag() == TypeTags.TYPE_REFERENCED_TYPE_TAG) &&
+                        !isKnownRecordType(type)) {
+                    fieldsMap.put(field.getFieldName(), TypeCreator.createField(PredefinedTypes.TYPE_STRING,
+                            field.getFieldName(), field.getFlags()));
+                    continue;
+                }
+            }
+
+            fieldsMap.put(field.getFieldName(), field);
+        }
+
+        Module ballerinaAnnotation = new Module("ballerina", "lang.annotations", "0.0.0");
+        Type customRecordType = TypeCreator.createRecordType("$stream$anon$constraint$", ballerinaAnnotation,
+                recordType.getFlags(), fieldsMap, PredefinedTypes.TYPE_ANYDATA, true, recordType.getTypeFlags());
+        return ValueCreator.createTypedescValue(customRecordType);
     }
 
     private static BArray getInnerFieldsArray(Type type) {

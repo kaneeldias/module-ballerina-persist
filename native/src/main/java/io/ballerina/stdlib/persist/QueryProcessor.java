@@ -36,6 +36,7 @@ import static io.ballerina.stdlib.persist.Utils.getEntity;
 import static io.ballerina.stdlib.persist.Utils.getFieldsIncludesAndTypeDescriptions;
 import static io.ballerina.stdlib.persist.Utils.getFutureResult;
 import static io.ballerina.stdlib.persist.Utils.getPersistClient;
+import static io.ballerina.stdlib.persist.Utils.getRowType;
 
 /**
  * This class provides the query processing implementations for persistence.
@@ -51,8 +52,10 @@ public class QueryProcessor {
         BString entity = getEntity(env);
         BObject persistClient = getPersistClient(client, entity);
 
-        RecordType streamConstraint = (RecordType) TypeUtils.getReferredType(recordType.getDescribingType());
-        StreamType streamType = TypeCreator.createStreamType(streamConstraint, PredefinedTypes.TYPE_NULL);
+        BTypedesc rowType = getRowType((RecordType) recordType.getDescribingType());
+        RecordType streamConstraint = (RecordType) rowType.getDescribingType();
+        RecordType streamConstraint2 = (RecordType) recordType.getDescribingType();
+        StreamType streamType = TypeCreator.createStreamType(streamConstraint2, PredefinedTypes.TYPE_NULL);
 
         BArray[] fieldsAndIncludes = getFieldsIncludesAndTypeDescriptions((RecordType) recordType.getDescribingType());
         BArray fields = fieldsAndIncludes[0];
@@ -62,12 +65,13 @@ public class QueryProcessor {
         BFuture future = env.getRuntime().invokeMethodAsyncSequentially(
                 persistClient, Constants.RUN_READ_QUERY_METHOD,
                 null, null, null, null, streamType,
-                recordType, true, fields, true, includes, true
+                rowType, true, fields, true, includes, true
         );
 
         BStream sqlStream = (BStream) getFutureResult(future);
         BObject persistStream = ValueCreator.createObjectValue(ModuleUtils.getModule(),
-                Constants.PERSIST_STREAM, sqlStream, null, fields, includes, typeDescriptions, persistClient);
+                Constants.PERSIST_STREAM, sqlStream, recordType, null, fields, includes, typeDescriptions,
+                persistClient);
 
         return ValueCreator.createStreamValue(TypeCreator.createStreamType(streamConstraint,
                 PredefinedTypes.TYPE_NULL), persistStream);

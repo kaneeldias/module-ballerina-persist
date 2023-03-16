@@ -48,6 +48,17 @@ isolated function getKeyFromDuplicateKeyErrorMessage(string errorMessage) return
     return key;
 }
 
+isolated function joinArray(string[] arr) returns string {
+    string result = "";
+    foreach int i in 0..<arr.length() {
+        if i > 0 {
+            result = result + ", ";
+        }
+        result = result + arr[i];
+    }
+    return result;
+}
+
 isolated function isInsertableField(FieldMetadata fieldMetadata) returns boolean {
     if fieldMetadata is SimpleFieldMetadata {
         return true;
