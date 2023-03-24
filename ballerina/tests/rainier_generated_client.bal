@@ -7,6 +7,8 @@ const BUILDING = "buildings";
 const DEPARTMENT = "departments";
 const ORDER_ITEM = "orderitems";
 
+table<Building> key(buildingCode) buildings = table[];
+
 public client class RainierClient {
     *AbstractPersistClient;
 
@@ -124,7 +126,7 @@ public client class RainierClient {
         self.persistClients = {
             [EMPLOYEE]: check new (self.dbClient, self.metadata.get(EMPLOYEE)),
             [WORKSPACE]: check new (self.dbClient, self.metadata.get(WORKSPACE)),
-            [BUILDING]: check new (self.dbClient, self.metadata.get(BUILDING)),
+            [BUILDING]: check new (self.dbClient, self.metadata.get(BUILDING), buildings),
             [DEPARTMENT]: check new (self.dbClient, self.metadata.get(DEPARTMENT)),
             [ORDER_ITEM]: check new (self.dbClient, self.metadata.get(ORDER_ITEM))
         };

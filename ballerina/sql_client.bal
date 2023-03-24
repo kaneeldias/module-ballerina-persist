@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/io;
 import ballerina/sql;
 
 # The client used by the generated persist clients to abstract and 
@@ -27,13 +28,14 @@ public client class SQLClient {
     private map<FieldMetadata> fieldMetadata;
     private string[] keyFields;
     private map<JoinMetadata> joinMetadata = {};
+    private table<record {}> key() 'table;
 
     # Initializes the `SQLClient`.
     #
     # + dbClient - The `sql:Client`, which is used to execute SQL queries
     # + metadata - Metadata of the entity
     # + return - A `persist:Error` if the client creation fails
-    public function init(sql:Client dbClient, Metadata metadata) returns Error? {
+    public function init(sql:Client dbClient, Metadata metadata, table<record {}> 'table = table[]) returns Error? {
         self.entityName = metadata.entityName;
         self.tableName = metadata.tableName;
         self.fieldMetadata = metadata.fieldMetadata;
@@ -42,27 +44,22 @@ public client class SQLClient {
         if metadata.joinMetadata is map<JoinMetadata> {
             self.joinMetadata = <map<JoinMetadata>>metadata.joinMetadata;
         }
+        self.'table = 'table;
     }
 
     # Performs a batch SQL `INSERT` operation to insert entity instances into a table.
     #
     # + insertRecords - The entity records to be inserted into the table
-    # + return - An `sql:ExecutionResult[]` containing the metadata of the query execution
-    #            or a `persist:Error` if the operation fails
-    public isolated function runBatchInsertQuery(record {}[] insertRecords) returns sql:ExecutionResult[]|Error {
-        sql:ParameterizedQuery[] insertQueries = self.getInsertQueries(insertRecords);        
-        sql:ExecutionResult[]|sql:Error result = self.dbClient->batchExecute(insertQueries);
-
-        if result is sql:Error {
-            if result.message().indexOf("Duplicate entry ") != () {
-                string duplicateKey = check getKeyFromDuplicateKeyErrorMessage(result.message());
-                return <DuplicateKeyError>error(string `A ${self.entityName} entity with the key '${duplicateKey}' already exists.`);
-            }
-
-            return <Error>error(result.message());
+    public isolated function runBatchInsertQuery(record {}[] insertRecords) returns DuplicateKeyError? {
+        foreach record {} insertRecord in insertRecords {
+            from record{} 'object in self.'table
+                where self.getKey('object) == self.getKey(insertRecord)
+                do {
+                    break;
+                };
+            
+            self.'table.add(insertRecord);
         }
-
-        return result;
     }
 
     # Performs an SQL `SELECT` operation to read a single entity record from the database.
@@ -75,31 +72,20 @@ public client class SQLClient {
     # + typeDescriptions - The type descriptions of the relations to be retrieved
     # + return - A record in the `rowType` type or a `persist:Error` if the operation fails
     public isolated function runReadByKeyQuery(typedesc<record {}> rowType, typedesc<record {}> rowTypeWithIdFields, anydata key, string[] fields = [], string[] include = [], typedesc<record {}>[] typeDescriptions = []) returns record {}|Error {
-        sql:ParameterizedQuery query = self.getSelectQuery(fields);
+        record {}[] x = [];
+        io:println(self.'table);
+        from record{} 'object in self.'table
+            where self.getKey('object) == key
+            do {
+                x.push('object);
+            };
 
-        foreach string joinKey in self.getJoinFields(include) {
-            query = sql:queryConcat(query, check self.getJoinQuery(joinKey));
+        if x.length() == 0 {
+            io:println(string `A record does not exist for '${self.entityName}' for key ${key.toBalString()}.`);
+            return <InvalidKeyError>error(string `A record does not exist for '${self.entityName}' for key ${key.toBalString()}.`);        
         }
-
-        query = sql:queryConcat(query, check self.getWhereQuery(key));
-
-        record {}|error result = self.dbClient->queryRow(query, rowTypeWithIdFields);
-
-        if result is sql:NoRowsError {
-            return <InvalidKeyError>error(string `A record does not exist for '${self.entityName}' for key ${key.toBalString()}.`);
-        }
-
-        if result is record {} {
-            check self.getManyRelations(result, fields, include, typeDescriptions);
-            self.removeUnwantedFields(result, fields);
-            result = result.cloneWithType(rowType);
-        }
-
-        if result is error {
-            return <Error>error(result.message());
-        }
-
-        return result;
+        
+        return x[0];
     }
 
     # Performs an SQL `SELECT` operation to read multiple entity records from the database.
@@ -110,13 +96,8 @@ public client class SQLClient {
     # + return - A stream of records in the `rowType` type or a `persist:Error` if the operation fails
     public isolated function runReadQuery(typedesc<record {}> rowType, string[] fields = [], string[] include = [])
     returns stream<record {}, sql:Error?>|Error {
-        sql:ParameterizedQuery query = self.getSelectQuery(fields);
-
-        foreach string joinKey in self.getJoinFields(include) {
-            query = sql:queryConcat(query, check self.getJoinQuery(joinKey));
-        }
-
-        stream<record {}, sql:Error?> resultStream = self.dbClient->query(query, rowType);
+        stream<record{}, sql:Error?> resultStream = from record {} 'object in self.'table
+                                                    select 'object;
         return resultStream;
     }
 
@@ -197,8 +178,12 @@ public client class SQLClient {
         return self.keyFields;
     }
 
-    private isolated function getKey(anydata|record {} 'object) returns record {} {
+    private isolated function getKey(anydata|record {} 'object) returns anydata|record {} {
         record {} keyRecord = {};
+
+        if self.keyFields.length() == 1 && 'object is record {} {
+            return 'object[self.keyFields[0]];
+        }
         
         if 'object is record {} {
             foreach string key in self.keyFields {
@@ -264,7 +249,7 @@ public client class SQLClient {
     private isolated function getManyRelationColumnNames(string prefix, string[] fields) returns sql:ParameterizedQuery {
         string[] columnNames = [];
         foreach string key in fields {
-            if key.indexOf(prefix + "[].") is () {
+            if key.indexOf(prefix + "[].") is () { // many relation columns will contain "[]" in their FieldMetadata key
                 continue;
             }
 
