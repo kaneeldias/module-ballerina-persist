@@ -31,6 +31,10 @@ public type Metadata record {|
     map<JoinMetadata> joinMetadata?;
 |};
 
+public type TableMetadata record {|
+    string entityName;
+    string[] keyFields;
+|};
 
 # Represents the metadata associated with a simple field in the entity record.
 #

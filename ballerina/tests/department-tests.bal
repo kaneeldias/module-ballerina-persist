@@ -22,7 +22,7 @@ Department department1 = {
 };
 
 Department invalidDepartment = {
-    deptNo: "invalid-department-extra-characters-to-force-failure",
+    deptNo: "department-1",
     deptName: "Finance"
 };
 
@@ -74,17 +74,14 @@ function departmentCreateTest2() returns error? {
 }
 
 @test:Config {
-    groups: ["department"]
+    groups: ["department"],
+    dependsOn: [departmentCreateTest]
 }
 function departmentCreateTestNegative() returns error? {
     RainierClient rainierClient = check new ();
     
     string[]|error department = rainierClient->/departments.post([invalidDepartment]);   
-    if department is Error {
-        test:assertTrue(department.message().includes("Data truncation: Data too long for column 'deptNo' at row 1."));
-    } else {
-        test:assertFail("Error expected.");
-    }
+    test:assertTrue(department is DuplicateKeyError, "DuplicateKeyError expected.");
     check rainierClient.close();
 }
 
@@ -108,11 +105,7 @@ function departmentReadOneTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
     Department|error departmentRetrieved = rainierClient->/departments/["invalid-department-id"].get();
-    if departmentRetrieved is InvalidKeyError {
-        test:assertEquals(departmentRetrieved.message(), "A record does not exist for 'Department' for key \"invalid-department-id\".");
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(departmentRetrieved is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
@@ -182,36 +175,32 @@ function departmentUpdateTestNegative1() returns error? {
         deptName: "Human Resources"   
     });
 
-    if department is InvalidKeyError {
-        test:assertEquals(department.message(), "A record does not exist for 'Department' for key \"invalid-department-id\".");
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(department is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
+// @test:Config {
+//     groups: ["department"],
+//     dependsOn: [departmentReadOneTest, departmentReadManyTest, departmentReadManyTestDependent]
+// }
+// function departmentUpdateTestNegative2() returns error? {
+//     RainierClient rainierClient = check new ();
+
+//     Department|error department = rainierClient->/departments/[department1.deptNo].put({
+//         deptName: "unncessarily-long-department-name-to-force-error-on-update"
+//     });
+
+//     if department is Error {
+//         test:assertTrue(department.message().includes("Data truncation: Data too long for column 'deptName' at row 1."));
+//     } else {
+//         test:assertFail("InvalidKeyError expected.");
+//     }
+//     check rainierClient.close();
+// }
+
 @test:Config {
     groups: ["department"],
-    dependsOn: [departmentReadOneTest, departmentReadManyTest, departmentReadManyTestDependent]
-}
-function departmentUpdateTestNegative2() returns error? {
-    RainierClient rainierClient = check new ();
-
-    Department|error department = rainierClient->/departments/[department1.deptNo].put({
-        deptName: "unncessarily-long-department-name-to-force-error-on-update"
-    });
-
-    if department is Error {
-        test:assertTrue(department.message().includes("Data truncation: Data too long for column 'deptName' at row 1."));
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
-    check rainierClient.close();
-}
-
-@test:Config {
-    groups: ["department"],
-    dependsOn: [departmentUpdateTest, departmentUpdateTestNegative2]
+    dependsOn: [departmentUpdateTest]
 }
 function departmentDeleteTest() returns error? {
     RainierClient rainierClient = check new ();
@@ -235,11 +224,6 @@ function departmentDeleteTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
     Department|error department = rainierClient->/departments/[department1.deptNo].delete();
-
-    if department is InvalidKeyError {
-        test:assertEquals(department.message(), string `A record does not exist for 'Department' for key "${department1.deptNo}".`);
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(department is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }

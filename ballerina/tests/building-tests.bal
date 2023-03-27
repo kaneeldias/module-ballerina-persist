@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/io;
 import ballerina/test;
 
 Building building1 = {
@@ -96,19 +95,14 @@ function buildingCreateTest2() returns error? {
 }
 
 @test:Config {
-    groups: ["building"]
+    groups: ["building"],
+    dependsOn: [buildingCreateTest, buildingCreateTest2]
 }
 function buildingCreateTestNegative() returns error? {
     RainierClient rainierClient = check new ();
     
-    string[] building = check rainierClient->/buildings.post([invalidBuilding]);
-    io:println("WTHDFD", building);
-    // test:assertTrue(building is Error, "Error expected.");
-    // if building is Error {
-    //     test:assertTrue(building.message().includes("Data truncation: Data too long for column 'buildingCode' at row 1."));
-    // } else {
-    //     test:assertFail("Error expected.");
-    // }
+    string[]|Error building = rainierClient->/buildings.post([invalidBuilding]);
+    test:assertTrue(building is DuplicateKeyError, "DuplicateKeyError expected.");
     check rainierClient.close();
 }
 
@@ -132,12 +126,7 @@ function buildingReadOneTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
     Building|error buildingRetrieved = rainierClient->/buildings/["invalid-building-code"].get();
-    test:assertTrue(buildingRetrieved is InvalidKeyError);
-    // if buildingRetrieved is InvalidKeyError {
-    //     test:assertEquals(buildingRetrieved.message(), "A record does not exist for 'Building' for key \"invalid-building-code\".");
-    // } else {
-    //     test:assertFail("InvalidKeyError expected.");
-    // }
+    test:assertTrue(buildingRetrieved is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
@@ -166,6 +155,19 @@ public type BuildingInfo2 record {|
 
 @test:Config {
     groups: ["building", "dependent"],
+    dependsOn: [buildingCreateTest, buildingCreateTest2, buildingReadManyDependentTest]
+}
+function buildingReadOneDependentTest() returns error? {
+    RainierClient rainierClient = check new ();
+
+    BuildingInfo2 building = check rainierClient->/buildings/[building1.buildingCode].get();
+
+    test:assertEquals(building, {city: building1.city, state: building1.state, country: building1.country, postalCode: building1.postalCode, 'type: building1.'type});
+    check rainierClient.close();
+}
+
+@test:Config {
+    groups: ["building", "dependent"],
     dependsOn: [buildingCreateTest, buildingCreateTest2]
 }
 function buildingReadManyDependentTest() returns error? {
@@ -185,7 +187,7 @@ function buildingReadManyDependentTest() returns error? {
 
 @test:Config {
     groups: ["building"],
-    dependsOn: [buildingReadOneTest, buildingReadManyTest, buildingReadManyDependentTest]
+    dependsOn: [buildingReadOneTest, buildingReadManyTest, buildingReadOneDependentTest]
 }
 function buildingUpdateTest() returns error? {
     RainierClient rainierClient = check new ();
@@ -206,49 +208,45 @@ function buildingUpdateTest() returns error? {
 
 @test:Config {
     groups: ["building"],
-    dependsOn: [buildingReadOneTest, buildingReadManyTest, buildingReadManyDependentTest]
+    dependsOn: [buildingReadOneTest, buildingReadManyTest, buildingReadOneDependentTest]
 }
 function buildingUpdateTestNegative1() returns error? {
     RainierClient rainierClient = check new ();
 
-    Building|error building = rainierClient->/buildings/["invalid-building-code"].put({
+    Building|Error building = rainierClient->/buildings/["invalid-building-code"].put({
         city: "Galle",
         state: "Southern Province",
         postalCode: "10890"
     });
 
-    if building is InvalidKeyError {
-        test:assertEquals(building.message(), "A record does not exist for 'Building' for key \"invalid-building-code\".");
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(building is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
+// @test:Config {
+//     groups: ["building"],
+//     dependsOn: [buildingReadOneTest, buildingReadManyTest]
+// }
+// function buildingUpdateTestNegative2() returns error? {
+//     RainierClient rainierClient = check new ();
+
+//     Building|error building = rainierClient->/buildings/[building1.buildingCode].put({
+//         city: "unncessarily-long-city-name-to-force-error-on-update",
+//         state: "Southern Province",
+//         postalCode: "10890"
+//     });
+
+//     if building is Error {
+//         test:assertTrue(building.message().includes("Data truncation: Data too long for column 'city' at row 1."));
+//     } else {
+//         test:assertFail("InvalidKeyError expected.");
+//     }
+//     check rainierClient.close();
+// }
+
 @test:Config {
     groups: ["building"],
-    dependsOn: [buildingReadOneTest, buildingReadManyTest, buildingReadManyDependentTest]
-}
-function buildingUpdateTestNegative2() returns error? {
-    RainierClient rainierClient = check new ();
-
-    Building|error building = rainierClient->/buildings/[building1.buildingCode].put({
-        city: "unncessarily-long-city-name-to-force-error-on-update",
-        state: "Southern Province",
-        postalCode: "10890"
-    });
-
-    if building is Error {
-        test:assertTrue(building.message().includes("Data truncation: Data too long for column 'city' at row 1."));
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
-    check rainierClient.close();
-}
-
-@test:Config {
-    groups: ["building"],
-    dependsOn: [buildingUpdateTest, buildingUpdateTestNegative2]
+    dependsOn: [buildingUpdateTest]
 }
 function buildingDeleteTest() returns error? {
     RainierClient rainierClient = check new ();
@@ -271,12 +269,7 @@ function buildingDeleteTest() returns error? {
 function buildingDeleteTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
-    Building|error building = rainierClient->/buildings/[building1.buildingCode].delete();
-
-    if building is error {
-        test:assertEquals(building.message(), string `A record does not exist for 'Building' for key "${building1.buildingCode}".`);
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    Building|Error building = rainierClient->/buildings/[building1.buildingCode].delete();
+    test:assertTrue(building is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }

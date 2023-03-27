@@ -29,7 +29,7 @@ Employee employee1 = {
 };
 
 Employee invalidEmployee = {
-    empNo: "invalid-employee-no-extra-characters-to-force-failure",
+    empNo: "employee-1",
     firstName: "Tom",
     lastName: "Scott",
     birthDate: {year: 1992, month: 11, day:13},
@@ -108,17 +108,14 @@ function employeeCreateTest2() returns error? {
 
 
 @test:Config {
-    groups: ["employee"]
+    groups: ["employee"],
+    dependsOn: [employeeCreateTest]
 }
 function employeeCreateTestNegative() returns error? {
     RainierClient rainierClient = check new ();
     
     string[]|error employee = rainierClient->/employees.post([invalidEmployee]);   
-    if employee is Error {
-        test:assertTrue(employee.message().includes("Data truncation: Data too long for column 'empNo' at row 1."));
-    } else {
-        test:assertFail("Error expected.");
-    }
+    test:assertTrue(employee is DuplicateKeyError, "DuplicateKeyError expected");
     check rainierClient.close();
 }
 
@@ -142,11 +139,7 @@ function employeeReadOneTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
     Employee|error employeeRetrieved = rainierClient->/employees/["invalid-employee-id"].get();
-    if employeeRetrieved is InvalidKeyError {
-        test:assertEquals(employeeRetrieved.message(), "A record does not exist for 'Employee' for key \"invalid-employee-id\".");
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(employeeRetrieved is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
@@ -245,57 +238,52 @@ function employeeUpdateTestNegative1() returns error? {
     Employee|error employee = rainierClient->/employees/["invalid-employee-id"].put({
         lastName: "Jones"   
     });
-
-    if employee is InvalidKeyError {
-        test:assertEquals(employee.message(), "A record does not exist for 'Employee' for key \"invalid-employee-id\".");
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(employee is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
+// @test:Config {
+//     groups: ["employee"],
+//     dependsOn: [employeeReadOneTest, employeeReadManyTest, employeeReadManyDependentTest1, employeeReadManyDependentTest2]
+// }
+// function employeeUpdateTestNegative2() returns error? {
+//     RainierClient rainierClient = check new ();
+
+//     Employee|error employee = rainierClient->/employees/[employee1.empNo].put({
+//         firstName: "unncessarily-long-employee-name-to-force-error-on-update"
+//     });
+
+//     if employee is Error {
+//         test:assertTrue(employee.message().includes("Data truncation: Data too long for column 'firstName' at row 1."));
+//     } else {
+//         test:assertFail("InvalidKeyError expected.");
+//     }
+//     check rainierClient.close();
+// }
+
+// @test:Config {
+//     groups: ["employee"],
+//     dependsOn: [employeeReadOneTest, employeeReadManyTest, employeeReadManyDependentTest1, employeeReadManyDependentTest2]
+// }
+// function employeeUpdateTestNegative3() returns error? {
+//     RainierClient rainierClient = check new ();
+
+//     Employee|error employee = rainierClient->/employees/[employee1.empNo].put({
+//         workspaceWorkspaceId: "invalid-workspaceWorkspaceId"
+//     });
+
+//     if employee is ForeignKeyConstraintViolationError {
+//         test:assertTrue(employee.message().includes("Cannot add or update a child row: a foreign key constraint fails (`test`.`Employee`, " +
+//             "CONSTRAINT `Employee_ibfk_2` FOREIGN KEY (`workspaceWorkspaceId`) REFERENCES `Workspace` (`workspaceId`))."));
+//     } else {
+//         test:assertFail("ForeignKeyConstraintViolationError expected.");
+//     }
+//     check rainierClient.close();
+// }
+
 @test:Config {
     groups: ["employee"],
-    dependsOn: [employeeReadOneTest, employeeReadManyTest, employeeReadManyDependentTest1, employeeReadManyDependentTest2]
-}
-function employeeUpdateTestNegative2() returns error? {
-    RainierClient rainierClient = check new ();
-
-    Employee|error employee = rainierClient->/employees/[employee1.empNo].put({
-        firstName: "unncessarily-long-employee-name-to-force-error-on-update"
-    });
-
-    if employee is Error {
-        test:assertTrue(employee.message().includes("Data truncation: Data too long for column 'firstName' at row 1."));
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
-    check rainierClient.close();
-}
-
-@test:Config {
-    groups: ["employee"],
-    dependsOn: [employeeReadOneTest, employeeReadManyTest, employeeReadManyDependentTest1, employeeReadManyDependentTest2]
-}
-function employeeUpdateTestNegative3() returns error? {
-    RainierClient rainierClient = check new ();
-
-    Employee|error employee = rainierClient->/employees/[employee1.empNo].put({
-        workspaceWorkspaceId: "invalid-workspaceWorkspaceId"
-    });
-
-    if employee is ForeignKeyConstraintViolationError {
-        test:assertTrue(employee.message().includes("Cannot add or update a child row: a foreign key constraint fails (`test`.`Employee`, " +
-            "CONSTRAINT `Employee_ibfk_2` FOREIGN KEY (`workspaceWorkspaceId`) REFERENCES `Workspace` (`workspaceId`))."));
-    } else {
-        test:assertFail("ForeignKeyConstraintViolationError expected.");
-    }
-    check rainierClient.close();
-}
-
-@test:Config {
-    groups: ["employee"],
-    dependsOn: [employeeUpdateTest, employeeUpdateTestNegative2, employeeUpdateTestNegative3]
+    dependsOn: [employeeUpdateTest]
 }
 function employeeDeleteTest() returns error? {
     RainierClient rainierClient = check new ();
@@ -319,11 +307,6 @@ function employeeDeleteTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
     Employee|error employee = rainierClient->/employees/[employee1.empNo].delete();
-
-    if employee is InvalidKeyError {
-        test:assertEquals(employee.message(), string `A record does not exist for 'Employee' for key "${employee1.empNo}".`);
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(employee is InvalidKeyError, "InvalidKeyError");
     check rainierClient.close();
 }

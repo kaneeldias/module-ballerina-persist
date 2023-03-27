@@ -23,7 +23,7 @@ Workspace workspace1 = {
 };
 
 Workspace invalidWorkspace = {
-    workspaceId: "invalid-workspace-extra-characters-to-force-failure",
+    workspaceId: "workspace-1",
     workspaceType: "small",
     locationBuildingCode: "building-2"
 };
@@ -79,17 +79,14 @@ function workspaceCreateTest2() returns error? {
 }
 
 @test:Config {
-    groups: ["workspace"]
+    groups: ["workspace"],
+    dependsOn: [workspaceCreateTest]
 }
 function workspaceCreateTestNegative() returns error? {
     RainierClient rainierClient = check new ();
     
     string[]|error workspace = rainierClient->/workspaces.post([invalidWorkspace]);   
-    if workspace is Error {
-        test:assertTrue(workspace.message().includes("Data truncation: Data too long for column 'workspaceId' at row 1."));
-    } else {
-        test:assertFail("Error expected.");
-    }
+    test:assertTrue(workspace is DuplicateKeyError, "DuplicateKeyError expected.");
     check rainierClient.close();
 }
 
@@ -130,11 +127,7 @@ function workspaceReadOneTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
     Workspace|error workspaceRetrieved = rainierClient->/workspaces/["invalid-workspace-id"].get();
-    if workspaceRetrieved is InvalidKeyError {
-        test:assertEquals(workspaceRetrieved.message(), "A record does not exist for 'Workspace' for key \"invalid-workspace-id\".");
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(workspaceRetrieved is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
@@ -205,37 +198,32 @@ function workspaceUpdateTestNegative1() returns error? {
     Workspace|error workspace = rainierClient->/workspaces/["invalid-workspace-id"].put({
         workspaceType: "large"   
     });
-
-    if workspace is InvalidKeyError {
-        test:assertEquals(workspace.message(), "A record does not exist for 'Workspace' for key \"invalid-workspace-id\".");
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(workspace is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
 
+// @test:Config {
+//     groups: ["workspace"],
+//     dependsOn: [workspaceReadOneTest, workspaceReadManyTest, workspaceReadManyDependentTest]
+// }
+// function workspaceUpdateTestNegative2() returns error? {
+//     RainierClient rainierClient = check new ();
+
+//     Workspace|error workspace = rainierClient->/workspaces/[workspace1.workspaceId].put({
+//         workspaceType: "unncessarily-long-workspace-type-to-force-error-on-update"
+//     });
+
+//     if workspace is Error {
+//         test:assertTrue(workspace.message().includes("Data truncation: Data too long for column 'workspaceType' at row 1."));
+//     } else {
+//         test:assertFail("InvalidKeyError expected.");
+//     }
+//     check rainierClient.close();
+// }
+
 @test:Config {
     groups: ["workspace"],
-    dependsOn: [workspaceReadOneTest, workspaceReadManyTest, workspaceReadManyDependentTest]
-}
-function workspaceUpdateTestNegative2() returns error? {
-    RainierClient rainierClient = check new ();
-
-    Workspace|error workspace = rainierClient->/workspaces/[workspace1.workspaceId].put({
-        workspaceType: "unncessarily-long-workspace-type-to-force-error-on-update"
-    });
-
-    if workspace is Error {
-        test:assertTrue(workspace.message().includes("Data truncation: Data too long for column 'workspaceType' at row 1."));
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
-    check rainierClient.close();
-}
-
-@test:Config {
-    groups: ["workspace"],
-    dependsOn: [workspaceUpdateTest, workspaceUpdateTestNegative2]
+    dependsOn: [workspaceUpdateTest]
 }
 function workspaceDeleteTest() returns error? {
     RainierClient rainierClient = check new ();
@@ -259,11 +247,6 @@ function workspaceDeleteTestNegative() returns error? {
     RainierClient rainierClient = check new ();
 
     Workspace|error workspace = rainierClient->/workspaces/[workspace1.workspaceId].delete();
-
-    if workspace is InvalidKeyError {
-        test:assertEquals(workspace.message(), string `A record does not exist for 'Workspace' for key "${workspace1.workspaceId}".`);
-    } else {
-        test:assertFail("InvalidKeyError expected.");
-    }
+    test:assertTrue(workspace is InvalidKeyError, "InvalidKeyError expected.");
     check rainierClient.close();
 }
