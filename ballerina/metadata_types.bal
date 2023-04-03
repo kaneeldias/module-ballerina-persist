@@ -34,6 +34,7 @@ public type Metadata record {|
 public type TableMetadata record {|
     string entityName;
     string[] keyFields;
+    function (anydata) returns record{}|InvalidKeyError queryOne?;
 |};
 
 # Represents the metadata associated with a simple field in the entity record.

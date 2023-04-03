@@ -21,6 +21,7 @@ public client class RainierClient {
     table<Workspace> key(workspaceId) workspaces = workspaces;
     table<Employee> key(empNo) employees = employees;
 
+
     private final record {|TableMetadata...;|} metadata = {
         [BUILDING]: {
             entityName: "Building",
@@ -42,10 +43,10 @@ public client class RainierClient {
 
     public function init() returns Error? {
         self.persistClients = {
-            [BUILDING]: check new (self.metadata.get(BUILDING), self.buildings),
-            [DEPARTMENT]: check new (self.metadata.get(DEPARTMENT), self.departments),
-            [WORKSPACE]: check new (self.metadata.get(WORKSPACE), self.workspaces),
-            [EMPLOYEE]: check new (self.metadata.get(EMPLOYEE), self.employees)
+            [BUILDING]: check new (self.metadata.get(BUILDING), self.buildings, self.queryBuildings, self.queryOneBuildings),
+            [DEPARTMENT]: check new (self.metadata.get(DEPARTMENT), self.departments, self.queryDepartments, self.queryOneDepartments),
+            [WORKSPACE]: check new (self.metadata.get(WORKSPACE), self.workspaces, self.queryWorkspaces, self.queryOneWorkspaces),
+            [EMPLOYEE]: check new (self.metadata.get(EMPLOYEE), self.employees, self.queryEmployees, self.queryOneEmployees)
         };
     }
 
@@ -217,6 +218,97 @@ public client class RainierClient {
 
     public function close() returns Error? {
         return ();
+    }   
+
+
+    public isolated function queryEmployees() returns stream<record{}, Error?> {
+        return from record{} 'object in self.employees
+            outer join var department in self.departments
+            on 'object.departmentDeptNo equals department?.deptNo
+            outer join var workspace in self.workspaces
+            on 'object.workspaceWorkspaceId equals workspace?.workspaceId
+            select {
+                ...'object,
+                "department": department,
+                "workspace": workspace
+            };
+    }
+
+    public isolated function queryOneEmployees(anydata key) returns record {}|InvalidKeyError {
+        from record{} 'object in self.employees
+            where self.persistClients.get(EMPLOYEE).getKey('object) == key
+            outer join var department in self.departments
+            on 'object.departmentDeptNo equals department?.deptNo
+            outer join var workspace in self.workspaces
+            on 'object.workspaceWorkspaceId equals workspace?.workspaceId
+            do {
+                return {
+                    ...'object,
+                    "department": department,
+                    "workspace": workspace
+                };
+            };
+        return <InvalidKeyError>error("Invalid key: " + key.toString());
+    }
+
+    public isolated function queryBuildings() returns stream<record{}, Error?> {
+        return from record{} 'object in self.buildings
+            select {
+                ...'object
+            };
+    }
+
+    public isolated function queryOneBuildings(anydata key) returns record{}|InvalidKeyError {
+        from record{} 'object in self.buildings
+            where self.persistClients.get(BUILDING).getKey('object) == key
+            do {
+                return {
+                    ...'object
+                };
+            };
+        return <InvalidKeyError>error("Invalid key: " + key.toString());
+    }
+
+    public isolated function queryDepartments() returns stream<record{}, Error?> {
+        return from record{} 'object in self.departments
+            select {
+                ...'object
+            };
+    }
+
+    public isolated function queryOneDepartments(anydata key) returns record{}|InvalidKeyError {
+        from record{} 'object in self.departments
+            where self.persistClients.get(DEPARTMENT).getKey('object) == key
+            do {
+                return {
+                    ...'object
+                };
+            };
+        return <InvalidKeyError>error("Invalid key: " + key.toString());
+    }
+    
+    public isolated function queryWorkspaces() returns stream<record{}, Error?> {
+        return from record{} 'object in self.workspaces
+            outer join var location in self.buildings
+            on 'object.locationBuildingCode equals location?.buildingCode
+            select {
+                ...'object,
+                "location": location
+            };
+    }
+
+    public isolated function queryOneWorkspaces(anydata key) returns record{}|InvalidKeyError {
+        from record{} 'object in self.workspaces
+            where self.persistClients.get(WORKSPACE).getKey('object) == key
+            outer join var location in self.buildings
+            on 'object.locationBuildingCode equals location?.buildingCode
+            do {
+                return {
+                    ...'object,
+                    "location": location
+                };
+            };
+        return <InvalidKeyError>error("Invalid key: " + key.toString());
     }
 }
 
