@@ -59,3 +59,38 @@ public isolated function closeEntityStream(stream<anydata, sql:Error?>? customSt
         }
     }
 }
+
+isolated function filterRecord(record {} 'object, string[] fields) returns record {} {
+        record {} retrieved = {};
+
+        foreach string 'field in fields {
+
+            // ignore many relations
+            if 'field.includes("[]") {
+                continue; 
+            }
+
+            // if field is part of a relation
+            if 'field.includes(".") {
+
+                int splitIndex = <int>'field.indexOf(".");
+                string relation = 'field.substring(0, splitIndex);
+                string innerField = 'field.substring(splitIndex + 1, 'field.length());
+
+                if 'object[relation] is record {} {
+                    anydata val = (<record {}>'object[relation])[innerField];
+
+                    if !(retrieved[relation] is record {}) {
+                        retrieved[relation] = {};
+                    }
+
+                    record {} innerRecord = <record {}>'retrieved[relation];
+                    innerRecord[innerField] = val;
+                }
+            } else {
+                retrieved['field] = 'object['field];
+            }
+
+        }
+        return retrieved;
+    }

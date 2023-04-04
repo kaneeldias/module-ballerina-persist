@@ -21,32 +21,44 @@ public client class RainierClient {
     table<Workspace> key(workspaceId) workspaces = workspaces;
     table<Employee> key(empNo) employees = employees;
 
-
-    private final record {|TableMetadata...;|} metadata = {
-        [BUILDING]: {
-            entityName: "Building",
-            keyFields: ["buildingCode"]
-        },
-        [DEPARTMENT]: {
-            entityName: "Department",
-            keyFields: ["deptNo"]
-        },
-        [WORKSPACE]: {
-            entityName: "Workspace",
-            keyFields: ["workspaceId"]
-        },
-        [EMPLOYEE]: {
-            entityName: "Employee",
-            keyFields: ["empNo"]
-        }
-    };
-
     public function init() returns Error? {
+        final map<TableMetadata> metadata = {
+            [BUILDING]: {
+                keyFields: ["buildingCode"],
+                query: self.queryBuildings,
+                queryOne: self.queryOneBuildings,
+                associationsMethods: {
+                    "workspaces": self.queryBuildingsWorkspaces
+                }
+            },
+            [DEPARTMENT]: {
+                keyFields: ["deptNo"],
+                query: self.queryDepartments,
+                queryOne: self.queryOneDepartments,
+                associationsMethods: {
+                    "employees": self.queryDepartmentsEmployees
+                }
+            },
+            [WORKSPACE]: {
+                keyFields: ["workspaceId"],
+                query: self.queryWorkspaces,
+                queryOne: self.queryOneWorkspaces,
+                associationsMethods: {
+                    "employees": self.queryWorkspacesEmployees
+                }
+            },
+            [EMPLOYEE]: {
+                keyFields: ["empNo"],
+                query: self.queryEmployees,
+                queryOne: self.queryOneEmployees
+            }
+        };
+
         self.persistClients = {
-            [BUILDING]: check new (self.metadata.get(BUILDING), self.buildings, self.queryBuildings, self.queryOneBuildings),
-            [DEPARTMENT]: check new (self.metadata.get(DEPARTMENT), self.departments, self.queryDepartments, self.queryOneDepartments),
-            [WORKSPACE]: check new (self.metadata.get(WORKSPACE), self.workspaces, self.queryWorkspaces, self.queryOneWorkspaces),
-            [EMPLOYEE]: check new (self.metadata.get(EMPLOYEE), self.employees, self.queryEmployees, self.queryOneEmployees)
+            [BUILDING]: check new (metadata.get(BUILDING)),
+            [DEPARTMENT]: check new (metadata.get(DEPARTMENT)),
+            [WORKSPACE]: check new (metadata.get(WORKSPACE)),
+            [EMPLOYEE]: check new (metadata.get(EMPLOYEE))
         };
     }
 
@@ -220,18 +232,18 @@ public client class RainierClient {
         return ();
     }   
 
-
-    public isolated function queryEmployees() returns stream<record{}, Error?> {
+    private isolated function queryEmployees(string[] fields) returns stream<record{}, Error?> {
         return from record{} 'object in self.employees
             outer join var department in self.departments
             on 'object.departmentDeptNo equals department?.deptNo
             outer join var workspace in self.workspaces
             on 'object.workspaceWorkspaceId equals workspace?.workspaceId
-            select {
-                ...'object,
-                "department": department,
-                "workspace": workspace
-            };
+            select filterRecord(
+                {
+                    ...'object,
+                    "department": department,
+                    "workspace": workspace
+                }, fields);
     }
 
     public isolated function queryOneEmployees(anydata key) returns record {}|InvalidKeyError {
@@ -251,11 +263,11 @@ public client class RainierClient {
         return <InvalidKeyError>error("Invalid key: " + key.toString());
     }
 
-    public isolated function queryBuildings() returns stream<record{}, Error?> {
+    public isolated function queryBuildings(string[] fields) returns stream<record{}, Error?> {
         return from record{} 'object in self.buildings
-            select {
+            select filterRecord({
                 ...'object
-            };
+            }, fields);
     }
 
     public isolated function queryOneBuildings(anydata key) returns record{}|InvalidKeyError {
@@ -269,11 +281,19 @@ public client class RainierClient {
         return <InvalidKeyError>error("Invalid key: " + key.toString());
     }
 
-    public isolated function queryDepartments() returns stream<record{}, Error?> {
-        return from record{} 'object in self.departments
-            select {
+    public isolated function queryBuildingsWorkspaces(record {} value, string[] fields) returns record{}[] {
+        return from record{} 'object in self.workspaces
+            where 'object.locationBuildingCode == value["buildingCode"]
+            select filterRecord({
                 ...'object
-            };
+            }, fields);
+    }
+
+    public isolated function queryDepartments(string[] fields) returns stream<record{}, Error?> {
+        return from record{} 'object in self.departments
+            select filterRecord({
+                ...'object
+            }, fields);
     }
 
     public isolated function queryOneDepartments(anydata key) returns record{}|InvalidKeyError {
@@ -286,15 +306,23 @@ public client class RainierClient {
             };
         return <InvalidKeyError>error("Invalid key: " + key.toString());
     }
+
+    public isolated function queryDepartmentsEmployees(record {} value, string[] fields) returns record{}[] {
+        return from record{} 'object in self.employees
+            where 'object.departmentDeptNo == value["deptNo"]
+            select filterRecord({
+                ...'object
+            }, fields);
+    }
     
-    public isolated function queryWorkspaces() returns stream<record{}, Error?> {
+    public isolated function queryWorkspaces(string[] fields) returns stream<record{}, Error?> {
         return from record{} 'object in self.workspaces
             outer join var location in self.buildings
             on 'object.locationBuildingCode equals location?.buildingCode
-            select {
+            select filterRecord({
                 ...'object,
                 "location": location
-            };
+            }, fields);
     }
 
     public isolated function queryOneWorkspaces(anydata key) returns record{}|InvalidKeyError {
@@ -310,5 +338,12 @@ public client class RainierClient {
             };
         return <InvalidKeyError>error("Invalid key: " + key.toString());
     }
-}
 
+    public isolated function queryWorkspacesEmployees(record {} value, string[] fields) returns record{}[] {
+        return from record{} 'object in self.employees
+            where 'object.workspaceWorkspaceId == value["workspaceId"]
+            select filterRecord({
+                ...'object
+            }, fields);
+    }
+}
