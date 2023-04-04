@@ -50,9 +50,9 @@ import static io.ballerina.stdlib.persist.Utils.getRecordTypeWithKeyFields;
  *
  * @since 0.5.6
  */
-public class MySQLProcessor {
+public class InMemoryProcessor {
 
-    private MySQLProcessor() {
+    private InMemoryProcessor() {
     }
 
     public static BStream query(Environment env, BObject client, BTypedesc targetType) {

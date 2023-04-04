@@ -63,12 +63,12 @@ public client class RainierClient {
     }
 
     isolated resource function get buildings(BuildingTargetType targetType = <>) returns stream<targetType, Error?> = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "query"
     } external;
 
     isolated resource function get buildings/[string buildingCode](BuildingTargetType targetType = <>) returns targetType|Error = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "queryOne"
     } external;
 
@@ -106,12 +106,12 @@ public client class RainierClient {
     }
 
     isolated resource function get departments(DepartmentTargetType targetType = <>) returns stream<targetType, Error?> = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "query"
     } external;
 
     isolated resource function get departments/[string deptNo](DepartmentTargetType targetType = <>) returns targetType|Error = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "queryOne"
     } external;
 
@@ -145,12 +145,12 @@ public client class RainierClient {
     }
 
     isolated resource function get workspaces(WorkspaceTargetType targetType = <>) returns stream<targetType, Error?> = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "query"
     } external;
 
     isolated resource function get workspaces/[string workspaceId](WorkspaceTargetType targetType = <>) returns targetType|Error = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "queryOne"
     } external;
 
@@ -185,12 +185,12 @@ public client class RainierClient {
     }
 
     isolated resource function get employees(EmployeeTargetType targetType = <>) returns stream<targetType, Error?> = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "query"
     } external;
 
     isolated resource function get employees/[string empNo](EmployeeTargetType targetType = <>) returns targetType|Error = @java:Method {
-        'class: "io.ballerina.stdlib.persist.datastore.MySQLProcessor",
+        'class: "io.ballerina.stdlib.persist.datastore.InMemoryProcessor",
         name: "queryOne"
     } external;
 
