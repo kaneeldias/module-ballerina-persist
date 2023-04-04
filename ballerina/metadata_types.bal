@@ -32,9 +32,10 @@ public type Metadata record {|
 |};
 
 public type TableMetadata record {|
-    string entityName;
     string[] keyFields;
-    function (anydata) returns record{}|InvalidKeyError queryOne?;
+    function (string[]) returns stream<record {}, Error?> query;
+    function (anydata) returns record{}|InvalidKeyError queryOne;
+    map<function (record {}, string[]) returns record{}[]> associationsMethods = {};
 |};
 
 # Represents the metadata associated with a simple field in the entity record.

@@ -22,10 +22,10 @@ public class PersistStream {
     private string[] fields;
     private string[] include;
     private typedesc<record{}>[] typeDescriptions;
-    private TableClient? persistClient;
+    private InMemoryClient? persistClient;
     private typedesc<record {}> targetType;
 
-    public isolated function init(stream<record {}, sql:Error?>? anydataStream, typedesc<record {}> targetType, string[] fields, string[] include, any[] typeDescriptions, TableClient persistClient, Error? err = ()) {
+    public isolated function init(stream<record {}, sql:Error?>? anydataStream, typedesc<record {}> targetType, string[] fields, string[] include, any[] typeDescriptions, InMemoryClient persistClient, Error? err = ()) {
         self.anydataStream = anydataStream;
         self.fields = fields;
         self.include = include;
@@ -56,15 +56,15 @@ public class PersistStream {
                 if value is error {
                     return <Error>error(value.message());
                 }
-                // check (<SQLClient>self.persistClient).getManyRelations(value, self.fields, self.include, self.typeDescriptions);
+                check (<InMemoryClient>self.persistClient).getManyRelations(value, self.fields, self.include, self.typeDescriptions);
 
-                // string[] keyFields = (<SQLClient>self.persistClient).getKeyFields();
-                // foreach string keyField in keyFields {
-                //     if self.fields.indexOf(keyField) is () {
-                //         _ = value.remove(keyField);
-                //     }
-                // }
-                
+                string[] keyFields = (<InMemoryClient>self.persistClient).getKeyFields();
+                foreach string keyField in keyFields {
+                    if self.fields.indexOf(keyField) is () {
+                        _ = value.remove(keyField);
+                    }
+                }
+
                 record {|record {} value;|} nextRecord = {value: checkpanic value.cloneWithType(self.targetType)};
                 return nextRecord;
             }
